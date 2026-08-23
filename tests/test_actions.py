@@ -111,7 +111,7 @@ class ActionFlowTests(unittest.TestCase):
         with TestClient(app) as client:
             self.assertEqual(client.get("/health").json(), {"status": "ok"})
             self.assertEqual(client.get("/").status_code, 200)
-            self.assertIn("Support, with evidence.", client.get("/").text)
+            self.assertIn("Resolve shipments with confidence.", client.get("/").text)
             client.post("/auth/demo-login", json={"identity": "lumenworks_demo"})
             csrf = client.cookies.get(CSRF_COOKIE)
             self.assertIsNotNone(csrf)

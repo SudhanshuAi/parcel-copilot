@@ -9,39 +9,32 @@
   <body>
     <main class="shell">
       <header class="brand-row">
-        <div>
-          <p class="eyebrow">ParcelPilot · assessment demo</p>
-          <h1>Support, with evidence.</h1>
-        </div>
+        <a class="brand" href="/" aria-label="ParcelPilot Support home"><span class="brand-mark">P</span><span>ParcelPilot <em>Support</em></span></a>
         <div id="account-badge" class="account-badge hidden"></div>
       </header>
-
-      <section id="login-card" class="card login-card">
-        <div>
-          <p class="section-label">Mocked customer sign-in</p>
-          <h2>Choose a demo account</h2>
-          <p>The server, not the browser or model, assigns the account scope.</p>
+      <section id="login-card" class="signin-card">
+        <div class="signin-intro">
+          <p class="eyebrow">ParcelPilot Support</p><h1>Resolve shipments with confidence.</h1>
+          <p>Get clear answers grounded in your support terms, operational records, and product guidance.</p>
+          <div class="trust-note"><span aria-hidden="true">⌁</span><span><strong>Protected account access</strong><br>The server assigns your workspace and access scope.</span></div>
         </div>
-        <form id="login-form" class="login-form">
-          <label for="identity">Demo identity</label>
-          <select id="identity" required></select>
-          <button type="submit">Start support chat</button>
+        <form id="login-form" class="signin-form">
+          <div class="form-heading"><p class="section-label">Sign in</p><h2>Select your workspace</h2><p>Choose the account you need help with.</p></div>
+          <div id="account-options" class="account-options" role="radiogroup" aria-label="Select account"></div>
+          <button type="submit" class="wide-button">Continue to support <span aria-hidden="true">→</span></button>
+          <p class="auth-footnote">Account selection is used in place of organization sign-in for this build.</p>
         </form>
       </section>
-
       <section id="chat-card" class="chat-card hidden" aria-live="polite">
+        <header class="chat-header"><div><p class="section-label">Support conversation</p><h2>How can we help?</h2></div><span class="availability"><i></i> Evidence-aware support</span></header>
         <div id="messages" class="messages"></div>
         <form id="chat-form" class="composer">
           <label class="sr-only" for="message">Ask ParcelPilot Support</label>
           <textarea id="message" rows="3" maxlength="4000" placeholder="Ask about an order, support target, known issue, or escalation…" required></textarea>
-          <div class="composer-footer">
-            <span>Answers are limited to this account and the supplied support data.</span>
-            <button id="send" type="submit">Send</button>
-          </div>
+          <div class="composer-footer"><span>Answers are scoped to your workspace and support data.</span><button id="send" type="submit">Send <span aria-hidden="true">↑</span></button></div>
         </form>
       </section>
     </main>
-    <template id="loading-template"><span class="loading">Checking the relevant records and policies…</span></template>
     <script src="/static/app.js" defer></script>
   </body>
 </html>

@@ -1,230 +1,71 @@
-const state = { history: [], account: null };
+const state = { history: [], account: null, identity: null };
 const loginCard = document.querySelector("#login-card");
 const chatCard = document.querySelector("#chat-card");
 const messages = document.querySelector("#messages");
 const accountBadge = document.querySelector("#account-badge");
-const identitySelect = document.querySelector("#identity");
+const accountOptions = document.querySelector("#account-options");
 
-function getCookie(name) {
-  const prefix = `${name}=`;
-  return document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(prefix))?.slice(prefix.length) || "";
-}
+const workspaceDetails = {
+  northstar_demo: { plan: "Enterprise", context: "Enterprise agreement active" },
+  lumenworks_demo: { plan: "Growth", context: "Service agreement active" },
+  beacon_demo: { plan: "Standard", context: "Standard support coverage" },
+  axis_demo: { plan: "Enterprise", context: "Enterprise support coverage" },
+};
+const sourceDetails = {
+  "support-policy-v3": { title: "Support Policy v3", status: "Current" },
+  "support-policy-v2": { title: "Support Policy v2", status: "Excluded", tone: "context" },
+  "cancellation-credit-sop-v4": { title: "Cancellation & Service Credit SOP v4", status: "Current" },
+  "product-operations-guide": { title: "Product Operations Guide", status: "Current" },
+  "northstar-agreement": { title: "Northstar Logistics Enterprise Agreement", status: "Active" },
+  "lumenworks-agreement": { title: "LumenWorks Service Agreement", status: "Active" },
+};
 
-async function request(path, options = {}) {
-  const headers = new Headers(options.headers || {});
-  const csrf = getCookie("parcelpilot_csrf");
-  if (csrf) headers.set("X-CSRF-Token", csrf);
-  const response = await fetch(path, { ...options, headers, credentials: "same-origin" });
-  const payload = response.status === 204 ? {} : await response.json();
-  if (!response.ok) throw new Error(payload.detail || "The request could not be completed.");
-  return payload;
-}
-
-function addMessage(kind, text) {
-  const element = document.createElement("article");
-  element.className = `message ${kind}`;
-  const paragraph = document.createElement("p");
-  paragraph.className = "message-text";
-  if (kind === "assistant") {
-    renderSafeMarkdown(paragraph, text);
-  } else {
-    paragraph.textContent = text;
-  }
-  element.append(paragraph);
-  messages.append(element);
-  messages.scrollTop = messages.scrollHeight;
-  return element;
-}
+function getCookie(name) { const prefix = `${name}=`; return document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(prefix))?.slice(prefix.length) || ""; }
+async function request(path, options = {}) { const headers = new Headers(options.headers || {}); const csrf = getCookie("parcelpilot_csrf"); if (csrf) headers.set("X-CSRF-Token", csrf); const response = await fetch(path, { ...options, headers, credentials: "same-origin" }); const payload = response.status === 204 ? {} : await response.json(); if (!response.ok) throw new Error(payload.detail || "The request could not be completed."); return payload; }
+function timeLabel(date = new Date()) { return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date); }
 
 function renderSafeMarkdown(parent, text) {
-  // Deliberately supports only inline emphasis/code. All content is inserted as
-  // text nodes, so model output can never become executable HTML.
-  const tokenPattern = /(\*\*[^*]+\*\*|`[^`]+`)/g;
-  let cursor = 0;
-  for (const match of text.matchAll(tokenPattern)) {
-    if (match.index > cursor) parent.append(document.createTextNode(text.slice(cursor, match.index)));
-    const token = match[0];
-    const element = document.createElement(token.startsWith("**") ? "strong" : "code");
-    element.textContent = token.slice(token.startsWith("**") ? 2 : 1, token.startsWith("**") ? -2 : -1);
-    parent.append(element);
-    cursor = match.index + token.length;
-  }
+  const tokenPattern = /(\*\*[^*]+\*\*|`[^`]+`)/g; let cursor = 0;
+  for (const match of text.matchAll(tokenPattern)) { if (match.index > cursor) parent.append(document.createTextNode(text.slice(cursor, match.index))); const token = match[0]; const element = document.createElement(token.startsWith("**") ? "strong" : "code"); element.textContent = token.slice(token.startsWith("**") ? 2 : 1, token.startsWith("**") ? -2 : -1); parent.append(element); cursor = match.index + token.length; }
   if (cursor < text.length) parent.append(document.createTextNode(text.slice(cursor)));
 }
 
-function addList(parent, className, entries, mapper) {
-  const list = document.createElement("ul");
-  list.className = className;
-  entries.forEach((entry) => {
-    const item = document.createElement("li");
-    item.textContent = mapper(entry);
-    list.append(item);
-  });
-  parent.append(list);
+function addMessage(kind, text, options = {}) {
+  const row = document.createElement("article"); row.className = `message-row ${kind}`;
+  const avatar = document.createElement("span"); avatar.className = "avatar"; avatar.setAttribute("aria-hidden", "true"); avatar.textContent = kind === "assistant" ? "P" : kind === "user" ? "You" : "!";
+  const bubble = document.createElement("div"); bubble.className = "message";
+  const paragraph = document.createElement("p"); paragraph.className = "message-text";
+  if (options.thinking) { paragraph.classList.add("thinking"); paragraph.innerHTML = `<span class="thinking-dots"><i></i><i></i><i></i></span><span>${text}</span>`; } else if (kind === "assistant") renderSafeMarkdown(paragraph, text); else paragraph.textContent = text;
+  const timestamp = document.createElement("time"); timestamp.className = "message-time"; timestamp.textContent = options.time || timeLabel();
+  bubble.append(paragraph, timestamp); row.append(avatar, bubble); messages.append(row); messages.scrollTop = messages.scrollHeight; return row;
 }
-
-function renderTrace(parent, trace) {
-  if (!trace?.length) return;
-  const details = document.createElement("details");
-  details.className = "tool-trace";
-  const summary = document.createElement("summary");
-  summary.textContent = `Tool activity (${trace.length})`;
-  details.append(summary);
-  addList(details, "tool-list", trace, (entry) => `${entry.name}: ${entry.summary}`);
-  parent.append(details);
+function addList(parent, className, entries, mapper) { const list = document.createElement("ul"); list.className = className; entries.forEach((entry) => { const item = document.createElement("li"); item.textContent = mapper(entry); list.append(item); }); parent.append(list); }
+function toolLabel(name) { return ({ search_documents: "Searching evidence", lookup_operational_record: "Checking records", evaluate_case: "Evaluating policy", propose_escalation: "Preparing escalation" })[name] || "Checking support data"; }
+function renderProgress(parent, trace = [], pending = false) {
+  const sequence = pending ? ["Preparing request", "Searching evidence", "Checking records", "Evaluating policy", "Answering"] : [...trace.map((entry) => toolLabel(entry.name)), "Answer ready"];
+  const container = document.createElement("div"); container.className = "progress-steps";
+  sequence.forEach((label, index) => { const step = document.createElement("span"); step.className = `progress-step ${pending ? (index === 0 ? "active" : "") : "done"}`; step.textContent = label; container.append(step); }); parent.append(container); return container;
 }
-
+function startThinking() {
+  const pending = addMessage("assistant", "Reviewing the relevant support data", { thinking: true }); const progress = renderProgress(pending.querySelector(".message"), [], true); const steps = [...progress.children]; let current = 0;
+  const timer = window.setInterval(() => { steps[current].classList.remove("active"); steps[current].classList.add("done"); current = (current + 1) % steps.length; steps[current].classList.add("active"); }, 950);
+  return { pending, timer };
+}
+function renderTrace(parent, trace) { if (!trace?.length) return; const details = document.createElement("details"); details.className = "tool-trace"; const summary = document.createElement("summary"); summary.textContent = `Tool activity (${trace.length})`; details.append(summary); addList(details, "tool-list", trace, (entry) => `${toolLabel(entry.name)}: ${entry.summary}`); parent.append(details); }
 function renderCitations(parent, citations) {
-  if (!citations?.length) return;
-  const section = document.createElement("section");
-  section.className = "citations";
-  const heading = document.createElement("strong");
-  heading.textContent = "Evidence trail";
-  section.append(heading);
-  const chips = document.createElement("div");
-  chips.className = "evidence-chips";
-  citations.forEach((citation) => {
-    const chip = document.createElement("span");
-    chip.className = `evidence-chip ${citation.relation}`;
-    const label = citation.relation === "overridden" ? "Default overridden" : citation.relation === "applied" ? "Applied rule" : "Retrieved evidence";
-    chip.textContent = `${label}: ${citation.source_id} · ${citation.section}`;
-    chips.append(chip);
-  });
-  section.append(chips);
-  parent.append(section);
+  if (!citations?.length) return; const section = document.createElement("section"); section.className = "citations"; const heading = document.createElement("div"); heading.className = "citations-heading"; heading.innerHTML = "<strong>Evidence trail</strong><span>Verified source context</span>"; section.append(heading);
+  const applied = citations.filter((citation) => citation.relation === "applied"); const cards = document.createElement("div"); cards.className = "evidence-cards";
+  citations.forEach((citation) => { const info = sourceDetails[citation.source_id] || { title: citation.source_id, status: "Current" }; const tone = citation.relation === "overridden" ? "overridden" : info.tone || ""; const card = document.createElement("article"); card.className = `evidence-card ${tone}`; const relation = citation.relation === "applied" ? "Applied to this answer" : citation.relation === "overridden" ? `Overridden by ${sourceDetails[applied[0]?.source_id]?.title || "an account-specific term"}` : info.tone === "context" ? "Context only — excluded from authority" : "Retrieved for verification"; card.innerHTML = `<div class="evidence-card-top"><div><strong></strong><p></p></div><span class="evidence-badge"></span></div><div class="evidence-relation"></div>`; card.querySelector("strong").textContent = info.title; card.querySelector("p").textContent = citation.section; card.querySelector(".evidence-badge").textContent = info.status; card.querySelector(".evidence-relation").textContent = relation; cards.append(card); }); section.append(cards); parent.append(section);
 }
-
-function renderVerification(parent, result) {
-  if (!result.needs_verification) return;
-  const notice = document.createElement("div");
-  notice.className = "verification";
-  notice.textContent = result.verification_reasons?.join(" ") || "This answer needs human verification.";
-  parent.append(notice);
-}
-
-function renderReliability(parent, reliability) {
-  if (!reliability || (!reliability.signals?.length && reliability.state === "grounded")) return;
-  const section = document.createElement("section");
-  section.className = `reliability ${reliability.state}`;
-  const title = document.createElement("strong");
-  title.textContent = reliability.state === "insufficient_evidence" ? "Unable to verify" : reliability.state === "needs_verification" ? "Verification required" : "Authority filter";
-  section.append(title);
-  const signals = reliability.signals || [];
-  addList(section, "reliability-list", signals, (signal) => `${signal.kind.replaceAll("_", " ")}: ${signal.message}`);
-  parent.append(section);
-}
-
-async function confirmProposal(proposal, card) {
-  const confirmButton = card.querySelector(".confirm");
-  confirmButton.disabled = true;
-  try {
-    const result = await request(`/api/actions/${encodeURIComponent(proposal.proposal_id)}/confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expected_payload_hash: proposal.payload_hash }),
-    });
-    card.querySelector(".proposal-meta").textContent = `Escalation ${result.action.status.replace("_", " ")} (${result.action.action_id}).`;
-    card.querySelector(".proposal-actions").remove();
-  } catch (error) {
-    confirmButton.disabled = false;
-    addMessage("system", error.message);
-  }
-}
-
-async function cancelProposal(proposal, card) {
-  try {
-    const result = await request(`/api/actions/${encodeURIComponent(proposal.proposal_id)}/cancel`, { method: "POST" });
-    card.querySelector(".proposal-meta").textContent = `Proposal ${result.proposal.status}.`;
-    card.querySelector(".proposal-actions").remove();
-  } catch (error) {
-    addMessage("system", error.message);
-  }
-}
-
-function renderProposal(parent, proposal) {
-  const card = document.createElement("section");
-  card.className = "proposal";
-  const title = document.createElement("p");
-  title.className = "proposal-title";
-  title.textContent = "Escalation ready for confirmation";
-  const summary = document.createElement("p");
-  summary.className = "proposal-meta";
-  summary.textContent = proposal.summary;
-  const meta = document.createElement("p");
-  meta.className = "proposal-meta";
-  meta.textContent = `Reason: ${proposal.reason_code}. Expires: ${new Date(proposal.expires_at).toLocaleTimeString()}.`;
-  const actions = document.createElement("div");
-  actions.className = "proposal-actions";
-  const confirm = document.createElement("button");
-  confirm.className = "confirm";
-  confirm.textContent = "Confirm escalation";
-  confirm.addEventListener("click", () => confirmProposal(proposal, card));
-  const cancel = document.createElement("button");
-  cancel.className = "danger";
-  cancel.textContent = "Cancel";
-  cancel.addEventListener("click", () => cancelProposal(proposal, card));
-  actions.append(confirm, cancel);
-  card.append(title, summary, meta, actions);
-  parent.append(card);
-}
-
-async function loadIdentities() {
-  const data = await request("/api/demo-identities");
-  data.forEach((identity) => {
-    const option = document.createElement("option");
-    option.value = identity.identity;
-    option.textContent = identity.display_name;
-    identitySelect.append(option);
-  });
-}
-
-document.querySelector("#login-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    await request("/auth/demo-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identity: identitySelect.value }) });
-    const me = await request("/api/me");
-    state.account = me.account;
-    accountBadge.textContent = `${me.account.account_name} · ${me.account.plan}`;
-    accountBadge.classList.remove("hidden");
-    loginCard.classList.add("hidden");
-    chatCard.classList.remove("hidden");
-    addMessage("assistant", `You’re signed in to ${me.account.account_name}. I can check orders, support terms, and known issues for this account.`);
-  } catch (error) {
-    addMessage("system", error.message);
-  }
-});
-
-document.querySelector("#chat-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const textarea = document.querySelector("#message");
-  const send = document.querySelector("#send");
-  const text = textarea.value.trim();
-  if (!text) return;
-  addMessage("user", text);
-  textarea.value = "";
-  send.disabled = true;
-  const pending = addMessage("assistant", "Checking the relevant records and policies…");
-  try {
-    const result = await request("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, history: state.history.slice(-10) }),
-    });
-    pending.remove();
-    const reply = addMessage("assistant", result.answer);
-    renderTrace(reply, result.tool_trace);
-    renderCitations(reply, result.citations);
-    renderReliability(reply, result.reliability);
-    renderVerification(reply, result);
-    result.action_proposals?.forEach((proposal) => renderProposal(reply, proposal));
-    state.history.push({ role: "user", content: text }, { role: "assistant", content: result.answer });
-  } catch (error) {
-    pending.remove();
-    addMessage("system", error.message);
-  } finally {
-    send.disabled = false;
-    textarea.focus();
-  }
-});
-
+function renderVerification(parent, result) { if (!result.needs_verification) return; const notice = document.createElement("div"); notice.className = "verification"; notice.textContent = result.verification_reasons?.join(" ") || "This answer needs human verification."; parent.append(notice); }
+function renderReliability(parent, reliability) { if (!reliability || (!reliability.signals?.length && reliability.state === "grounded")) return; const section = document.createElement("section"); section.className = `reliability ${reliability.state}`; const title = document.createElement("strong"); title.textContent = reliability.state === "insufficient_evidence" ? "Unable to verify" : reliability.state === "needs_verification" ? "Verification required" : "Authority filter"; section.append(title); addList(section, "reliability-list", reliability.signals || [], (signal) => `${signal.kind.replaceAll("_", " ")}: ${signal.message}`); parent.append(section); }
+function formatRemaining(expiresAt) { const remaining = Math.max(0, new Date(expiresAt).getTime() - Date.now()); const minutes = Math.floor(remaining / 60000); const seconds = Math.floor((remaining % 60000) / 1000); return remaining ? `Expires in ${minutes}:${String(seconds).padStart(2, "0")}` : "This proposal has expired"; }
+function renderSuccess(card, action) { card.classList.add("success"); card.innerHTML = `<div class="proposal-header"><span class="proposal-icon">✓</span><p class="proposal-title">Escalation confirmed</p></div><p class="proposal-meta">Your request has been sent to the support team for review.</p><p class="proposal-target">Action ID: ${action.action_id}</p><p class="proposal-meta">Completed ${timeLabel()}</p>`; }
+async function confirmProposal(proposal, card) { const button = card.querySelector(".confirm"); button.disabled = true; try { const result = await request(`/api/actions/${encodeURIComponent(proposal.proposal_id)}/confirm`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expected_payload_hash: proposal.payload_hash }) }); renderSuccess(card, result.action); } catch (error) { button.disabled = false; addMessage("system", error.message); } }
+async function cancelProposal(proposal, card) { try { const result = await request(`/api/actions/${encodeURIComponent(proposal.proposal_id)}/cancel`, { method: "POST" }); card.innerHTML = `<div class="proposal-header"><span class="proposal-icon">–</span><p class="proposal-title">Escalation cancelled</p></div><p class="proposal-meta">${result.proposal.status === "cancelled" ? "No request was sent." : "This request is no longer active."}</p>`; } catch (error) { addMessage("system", error.message); } }
+function renderProposal(parent, proposal) { const card = document.createElement("section"); card.className = "proposal"; card.innerHTML = `<div class="proposal-header"><span class="proposal-icon">↗</span><p class="proposal-title">Ready for your confirmation</p></div><p class="proposal-meta"></p><p class="proposal-target"></p><p class="countdown"></p><div class="proposal-actions"><button class="confirm">Confirm escalation</button><button class="danger">Cancel</button></div>`; card.querySelector(".proposal-meta").textContent = proposal.summary; card.querySelector(".proposal-target").textContent = `This will send ${proposal.target_type} ${proposal.target_id || "request"} to support for review.`; const countdown = card.querySelector(".countdown"); const tick = () => { countdown.textContent = formatRemaining(proposal.expires_at); }; tick(); const timer = window.setInterval(tick, 1000); card.querySelector(".confirm").addEventListener("click", () => { window.clearInterval(timer); confirmProposal(proposal, card); }); card.querySelector(".danger").addEventListener("click", () => { window.clearInterval(timer); cancelProposal(proposal, card); }); parent.append(card); }
+function renderAccounts(data) { data.forEach((identity, index) => { const details = workspaceDetails[identity.identity] || { plan: "Customer", context: "Support workspace" }; const label = document.createElement("label"); label.className = "account-option"; label.innerHTML = `<input type="radio" name="identity" value="${identity.identity}" ${index === 0 ? "checked" : ""} required><span class="account-option-card"><strong></strong><span></span><small></small></span>`; label.querySelector("strong").textContent = identity.display_name; label.querySelector("span span").textContent = details.plan; label.querySelector("small").textContent = details.context; accountOptions.append(label); }); }
+async function loadIdentities() { renderAccounts(await request("/api/demo-identities")); }
+document.querySelector("#login-form").addEventListener("submit", async (event) => { event.preventDefault(); const selected = document.querySelector('input[name="identity"]:checked'); if (!selected) return; try { await request("/auth/demo-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identity: selected.value }) }); const me = await request("/api/me"); state.account = me.account; state.identity = selected.value; accountBadge.textContent = `${me.account.account_name} · ${me.account.plan}`; accountBadge.classList.remove("hidden"); loginCard.classList.add("hidden"); chatCard.classList.remove("hidden"); document.body.classList.add("chat-active"); addMessage("assistant", `Welcome to ${me.account.account_name}. I can help with orders, support terms, and known issues for this workspace.`); } catch (error) { addMessage("system", error.message); } });
+document.querySelector("#chat-form").addEventListener("submit", async (event) => { event.preventDefault(); const textarea = document.querySelector("#message"); const send = document.querySelector("#send"); const text = textarea.value.trim(); if (!text) return; addMessage("user", text); textarea.value = ""; send.disabled = true; const thinking = startThinking(); try { const result = await request("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text, history: state.history.slice(-10) }) }); window.clearInterval(thinking.timer); thinking.pending.remove(); const reply = addMessage("assistant", result.answer); renderProgress(reply.querySelector(".message"), result.tool_trace); renderCitations(reply.querySelector(".message"), result.citations); renderReliability(reply.querySelector(".message"), result.reliability); renderVerification(reply.querySelector(".message"), result); renderTrace(reply.querySelector(".message"), result.tool_trace); result.action_proposals?.forEach((proposal) => renderProposal(reply.querySelector(".message"), proposal)); state.history.push({ role: "user", content: text }, { role: "assistant", content: result.answer }); } catch (error) { window.clearInterval(thinking.timer); thinking.pending.remove(); addMessage("system", error.message); } finally { send.disabled = false; textarea.focus(); } });
 loadIdentities().catch((error) => addMessage("system", error.message));
