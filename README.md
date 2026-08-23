@@ -57,24 +57,6 @@ python -m parcelpilot.evals seed\parcelpilot.db
 
 Expected result: 12/12 passed, with 100% privacy and action-safety pass rates. These evals intentionally do not call OpenAI.
 
-## Run with Docker
-
-The Docker image includes only the application and the seed database. It creates its writable SQLite copy on first startup if it is absent.
-
-```powershell
-docker build -t parcelpilot-support .
-docker run --rm -p 10000:10000 `
-  -e PARCELPILOT_ENV=production `
-  -e PARCELPILOT_SECURE_COOKIES=false `
-  -e SESSION_SECRET="replace-with-a-long-random-secret" `
-  -e LLM_PROVIDER="groq" `
-  -e GROQ_API_KEY="YOUR_GROQ_API_KEY" `
-  -e GROQ_MODEL="openai/gpt-oss-20b" `
-  parcelpilot-support
-```
-
-`PARCELPILOT_SECURE_COOKIES=false` is only for local HTTP Docker testing. Leave it unset in a hosted HTTPS environment.
-
 ### Run with Docker Compose (recommended locally)
 
 Copy the environment template, add a newly generated provider key, then start the service:
@@ -93,27 +75,44 @@ docker compose down
 
 Compose retains the local SQLite action/audit database in the named `parcelpilot_data` volume. To reset the local demo data completely, run `docker compose down --volumes` (this deletes local action/audit history).
 
-## Deploy to Render (do after local verification)
+## Solution architecture
 
-1. Push this project to a private or public Git repository. Do not commit `.env`, API keys, or `data/*.db`.
-2. In Render, create **New → Web Service**, connect the repository, and select the **Docker** runtime. Render runs the image’s `CMD`, which already binds Uvicorn to Render’s `PORT` value.
-3. Set the health-check path to `/health`.
-4. In the service’s environment settings, add:
+```text
+Browser UI → signed session + CSRF → FastAPI API → bounded agent loop
+                                                  ├─ scoped document/record tools
+                                                  ├─ deterministic policy engine
+                                                  └─ escalation proposal/confirmation service
+                                                               │
+                                                        SQLite data snapshot
+```
 
-   | Key | Value |
-   | --- | --- |
-   | `PARCELPILOT_ENV` | `production` |
-   | `SESSION_SECRET` | A new long random secret; never reuse the local value. |
-   | `LLM_PROVIDER` | `groq` (or `openai` if using OpenAI instead). |
-   | `GROQ_API_KEY` | Your Groq API key, saved as a secret. |
-   | `GROQ_MODEL` | Optional; defaults to `openai/gpt-oss-20b`. |
+The browser provides the conversation experience, including tool progress, evidence trails, and confirmation controls. FastAPI owns authentication, validation, account scope, and state-changing endpoints. The LLM can choose only from a small set of typed server tools; it cannot query the database directly, supply an account ID, or execute an action.
 
-5. For persistent escalation/audit state, attach a persistent disk mounted at `/var/data` and set `PARCELPILOT_DATABASE_PATH=/var/data/parcelpilot.db`. Persistent disks require a paid Render service. Without a disk, the app remains usable but SQLite-backed proposals/audit records reset after a restart or deploy.
-6. Deploy, wait for Render’s health check to pass, then open the assigned `onrender.com` URL. Confirm the login page, `/health`, one scoped lookup, and one proposal/Confirm cycle manually.
+The SQLite snapshot contains the supplied support documents, typed policy rules, accounts, orders, tickets, action proposals, and audit records. Document search uses SQLite full-text search. A separate authority registry determines which sources are current and eligible before retrieval results are used.
 
-Render web services accept a repository or Docker image, use the `PORT` environment variable for public HTTP traffic, and expose environment settings, health checks, and persistent disks in the service configuration. See the official [Render web-service guide](https://render.com/docs/web-services), [Docker guide](https://render.com/docs/docker), and [persistent-disk guide](https://render.com/docs/disks).
+## Key product and technical decisions
 
-Groq is configured through its OpenAI-compatible endpoint (`https://api.groq.com/openai/v1`). The default Groq model supports local function calling, so ParcelPilot continues to execute tools only on its own server. See Groq’s [OpenAI compatibility](https://console.groq.com/docs/openai) and [local tool-calling](https://console.groq.com/docs/tool-use/local-tool-calling) documentation.
+### Trustworthy support answers
+
+- **Source authority is explicit.** Active customer agreements override a default policy only where they explicitly cover the topic. Current SOPs and policies are used by default; deprecated policy and historical ticket resolutions remain available for audit/context but cannot become policy authority.
+- **Business decisions are deterministic.** Cancellation fees, service credits, severity, and SLA calculations are handled by code in the policy engine rather than left to LLM reasoning.
+- **Evidence is visible.** Each answer can show applied, overridden, current, or context-only sources so a customer or reviewer can understand why the system reached its conclusion.
+- **Uncertainty is honest.** Missing or conflicting authoritative evidence produces a verification/escalation path instead of a confident unsupported claim.
+
+### Privacy and safe actions
+
+- **Authorization is enforced in the data layer.** The server creates a signed account context and injects it into scoped repositories. Browser input and model tool calls cannot alter that account scope.
+- **Unauthorized lookups fail closed.** Unknown and cross-account records return the same generic response, preventing data leakage and record enumeration.
+- **Actions require explicit confirmation.** The agent can prepare an escalation proposal only. A dedicated confirmation request validates CSRF, session/account ownership, expiry, immutable payload hash, and idempotency before the mocked action is recorded.
+
+### Practical implementation choices
+
+- **SQLite and lexical full-text search** keep the project portable, transparent, and easy to run locally for the supplied corpus.
+- **A bounded tool loop** limits model autonomy and makes tool traces inspectable.
+- **Groq or OpenAI support** uses the same OpenAI-compatible client abstraction, while all tools continue to run only on ParcelPilot's server.
+- **Automated tests and deterministic evals** cover access control, source precedence, calculations, action safety, prompt-injection resistance, and reliability behavior.
+
+For a production evolution, the first priorities would be OIDC/SAML login, managed Postgres for durable audit/action data, policy approval/versioning, observability, and verified carrier or ticketing integrations.
 
 ## Safety and data boundaries
 
