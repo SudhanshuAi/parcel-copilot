@@ -1,0 +1,21 @@
+services:
+  parcelpilot:
+    build:
+      context: .
+    ports:
+      - "10000:10000"
+    environment:
+      PARCELPILOT_ENV: production
+      PARCELPILOT_SECURE_COOKIES: "false"
+      PARCELPILOT_DATABASE_PATH: /var/data/parcelpilot.db
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+    volumes:
+      - parcelpilot_data:/var/data
+
+volumes:
+  parcelpilot_data:

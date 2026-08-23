@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ParcelPilot Support</title>
+    <link rel="stylesheet" href="/static/app.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="brand-row">
+        <div>
+          <p class="eyebrow">ParcelPilot · assessment demo</p>
+          <h1>Support, with evidence.</h1>
+        </div>
+        <div id="account-badge" class="account-badge hidden"></div>
+      </header>
+
+      <section id="login-card" class="card login-card">
+        <div>
+          <p class="section-label">Mocked customer sign-in</p>
+          <h2>Choose a demo account</h2>
+          <p>The server, not the browser or model, assigns the account scope.</p>
+        </div>
+        <form id="login-form" class="login-form">
+          <label for="identity">Demo identity</label>
+          <select id="identity" required></select>
+          <button type="submit">Start support chat</button>
+        </form>
+      </section>
+
+      <section id="chat-card" class="chat-card hidden" aria-live="polite">
+        <div id="messages" class="messages"></div>
+        <form id="chat-form" class="composer">
+          <label class="sr-only" for="message">Ask ParcelPilot Support</label>
+          <textarea id="message" rows="3" maxlength="4000" placeholder="Ask about an order, support target, known issue, or escalation…" required></textarea>
+          <div class="composer-footer">
+            <span>Answers are limited to this account and the supplied support data.</span>
+            <button id="send" type="submit">Send</button>
+          </div>
+        </form>
+      </section>
+    </main>
+    <template id="loading-template"><span class="loading">Checking the relevant records and policies…</span></template>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

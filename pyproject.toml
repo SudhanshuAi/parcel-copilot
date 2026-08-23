@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parcelpilot-support-agent"
+version = "0.1.0"
+description = "ParcelPilot assessment support agent"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "openai>=1.0,<3",
+  "openpyxl>=3.1,<4",
+  "pypdf>=5,<7",
+  "uvicorn[standard]>=0.30,<1",
+]
+
+[tool.setuptools]
+packages = ["parcelpilot"]

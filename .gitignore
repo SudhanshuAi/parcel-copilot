@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.venv-*/
+*.egg-info/
+.env
+Assessment.md
+PLAN.md
+*.pdf
+*.xlsx
+data/*.db
+data/*.db-*
